@@ -1,4 +1,7 @@
 import uvicorn
+import json
+import asyncio
+
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse
 from starlette.routing import Route, WebSocketRoute
@@ -23,7 +26,43 @@ async def websocket_endpoint(websocket: WebSocket):
         tools=TOOLS,
         instructions=INSTRUCTIONS,
     )
-    await agent.aconnect(browser_receive_stream, websocket.send_text)
+
+    agent_task = None
+
+    async def handle_event(event):
+        nonlocal agent_task
+        if isinstance(event, str):
+            event = json.loads(event)
+
+        print("Evento ricevuto:", event.get("type"))
+        #if agent_task and not agent_task.done():
+        #    agent_task.cancel()
+
+    async def start_agent():
+        nonlocal agent_task
+
+        if agent_task and not agent_task.done():
+            agent_task.cancel()
+            try:
+                await agent_task
+            except asyncio.CancelledError:
+                print("Vecchio task dell'agente chiuso")
+
+        agent_task = asyncio.create_task(agent.aconnect(browser_receive_stream, handle_event))
+        print("Agente avviato")
+
+    await start_agent()  
+
+    try:
+        while True:
+           await asyncio.sleep(0.5)  # mantiene la connessione attiva
+    finally:
+        if agent_task and not agent_task.done():
+            agent_task.cancel()
+            try:
+                await agent_task
+            except asyncio.CancelledError:
+                print("Task dell'agente chiuso in cleanup")      
 
 
 async def homepage(request):
