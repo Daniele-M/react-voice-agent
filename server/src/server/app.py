@@ -1,12 +1,6 @@
 import uvicorn
-<<<<<<< Updated upstream
-import json
-import asyncio
-
-=======
 import asyncio
 import json
->>>>>>> Stashed changes
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse
 from starlette.routing import Route, WebSocketRoute
@@ -59,44 +53,6 @@ async def websocket_endpoint(websocket: WebSocket):
         instructions=INSTRUCTIONS,
     )
 
-<<<<<<< Updated upstream
-    agent_task = None
-
-    async def handle_event(event):
-        nonlocal agent_task
-        if isinstance(event, str):
-            event = json.loads(event)
-
-        print("Evento ricevuto:", event.get("type"))
-        #if agent_task and not agent_task.done():
-        #    agent_task.cancel()
-
-    async def start_agent():
-        nonlocal agent_task
-
-        if agent_task and not agent_task.done():
-            agent_task.cancel()
-            try:
-                await agent_task
-            except asyncio.CancelledError:
-                print("Vecchio task dell'agente chiuso")
-
-        agent_task = asyncio.create_task(agent.aconnect(browser_receive_stream, handle_event))
-        print("Agente avviato")
-
-    await start_agent()  
-
-    try:
-        while True:
-           await asyncio.sleep(0.5)  # mantiene la connessione attiva
-    finally:
-        if agent_task and not agent_task.done():
-            agent_task.cancel()
-            try:
-                await agent_task
-            except asyncio.CancelledError:
-                print("Task dell'agente chiuso in cleanup")      
-=======
     is_speaking = False
 
     async def log_and_send(text):
@@ -119,8 +75,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await agent.aconnect(combined_stream(), log_and_send)
 
->>>>>>> Stashed changes
-
 
 async def homepage(request):
     with open("src/server/static/index.html") as f:
@@ -129,8 +83,6 @@ async def homepage(request):
 
 
 # catchall route to load files from src/server/static
-
-
 routes = [Route("/", homepage), WebSocketRoute("/ws", websocket_endpoint)]
 
 app = Starlette(debug=True, routes=routes)
