@@ -20,10 +20,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
     control_queue = asyncio.Queue()
 
-    # Stream originale dal browser
+    # Stream from the browser
     browser_stream = websocket_stream(websocket)
 
-    # Stream combinato: merge tra browser e control queue
     async def combined_stream():
         browser_task = asyncio.create_task(browser_stream.__anext__())
         queue_task = asyncio.create_task(control_queue.get())
@@ -55,7 +54,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     is_speaking = False
 
-    async def log_and_send(text):
+    async def send_to_websocket(text):
         nonlocal is_speaking
 
         text_json = json.loads(text)
@@ -66,14 +65,13 @@ async def websocket_endpoint(websocket: WebSocket):
             is_speaking = False
 
         if "speech_started" in text and is_speaking:
-            print("🛑 Utente parla — interrompo generazione in corso")
+            print("🛑 User is speaking")
             is_speaking = False
             await control_queue.put({"type": "response.cancel"})
             await websocket.send_text(json.dumps({"type": "client.stop_audio"}))
-        print("Inviando chunk al browser:", text[:100])  # solo primi 100 caratteri
         await websocket.send_text(text)
 
-    await agent.aconnect(combined_stream(), log_and_send)
+    await agent.aconnect(combined_stream(), send_to_websocket)
 
 
 async def homepage(request):

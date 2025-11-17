@@ -130,14 +130,12 @@
                 audioPlayer.init(24000);
 
                 ws.onmessage = event => {
-
+                    const data = JSON.parse(event.data);
                     if (data?.type === 'client.stop_audio') {
-                        console.log("🛑 Stop audio playback");
                         audioPlayer.stop();
                         return;
                     }
 
-                    const data = JSON.parse(event.data);
                     if (data?.type !== 'response.audio.delta') return;
 
                     const binary = atob(data.delta);
