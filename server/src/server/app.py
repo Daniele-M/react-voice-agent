@@ -1,4 +1,6 @@
 import uvicorn
+import asyncio
+import json
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse
 from starlette.routing import Route, WebSocketRoute
@@ -16,14 +18,60 @@ from server.tools import TOOLS
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    browser_receive_stream = websocket_stream(websocket)
+    control_queue = asyncio.Queue()
+
+    # Stream from the browser
+    browser_stream = websocket_stream(websocket)
+
+    async def combined_stream():
+        browser_task = asyncio.create_task(browser_stream.__anext__())
+        queue_task = asyncio.create_task(control_queue.get())
+
+        while True:
+            done, _ = await asyncio.wait(
+                [browser_task, queue_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if browser_task in done:
+                try:
+                    data = browser_task.result()
+                    yield data
+                except StopAsyncIteration:
+                    break
+                browser_task = asyncio.create_task(browser_stream.__anext__())
+
+            if queue_task in done:
+                data = queue_task.result()
+                yield json.dumps(data)
+                queue_task = asyncio.create_task(control_queue.get())
 
     agent = OpenAIVoiceReactAgent(
         model="gpt-realtime",
         tools=TOOLS,
         instructions=INSTRUCTIONS,
     )
-    await agent.aconnect(browser_receive_stream, websocket.send_text)
+
+    is_speaking = False
+
+    async def send_to_websocket(text):
+        nonlocal is_speaking
+
+        text_json = json.loads(text)
+
+        if "response.audio.delta" in text or "response.created" in text:
+            is_speaking = True
+        elif "response.audio.done" in text or "response.done" in text:
+            is_speaking = False
+
+        if "speech_started" in text and is_speaking:
+            print("🛑 User is speaking")
+            is_speaking = False
+            await control_queue.put({"type": "response.cancel"})
+            await websocket.send_text(json.dumps({"type": "client.stop_audio"}))
+        await websocket.send_text(text)
+
+    await agent.aconnect(combined_stream(), send_to_websocket)
 
 
 async def homepage(request):
@@ -33,8 +81,6 @@ async def homepage(request):
 
 
 # catchall route to load files from src/server/static
-
-
 routes = [Route("/", homepage), WebSocketRoute("/ws", websocket_endpoint)]
 
 app = Starlette(debug=True, routes=routes)
